@@ -161,6 +161,26 @@ PAG_API @interface PAGPlayer : NSObject
 - (BOOL)flush;
 
 /**
+ * The time cost by rendering in microseconds.
+ */
+- (int64_t)renderingTime;
+
+/**
+ * The time cost by presenting in microseconds.
+ */
+- (int64_t)presentingTime;
+
+/**
+ * The time cost by image decoding in microseconds.
+ */
+- (int64_t)imageDecodingTime;
+
+/**
+ * The memory cost by graphics in bytes.
+ */
+- (int64_t)graphicsMemory;
+
+/**
  * Returns a rectangle in pixels that defines the displaying area of the specified layer, which is
  * in the coordinate of the PAGSurface.
  */

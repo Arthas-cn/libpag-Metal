@@ -95,9 +95,8 @@
 - (void)setBounds:(CGRect)bounds {
   CGRect oldBounds = self.bounds;
   [super setBounds:bounds];
-  if (_isVisible && pagSurface == nil && bounds.size.width > 0 && bounds.size.height > 0) {
-    [self initPAGSurface];
-    return;
+  if (pagSurface == nil && bounds.size.width > 0 && bounds.size.height > 0) {
+    [self checkVisible];
   }
   if (pagSurface != nil &&
       (oldBounds.size.width != bounds.size.width || oldBounds.size.height != bounds.size.height)) {
@@ -111,9 +110,8 @@
 - (void)setFrame:(CGRect)frame {
   CGRect oldRect = self.frame;
   [super setFrame:frame];
-  if (_isVisible && pagSurface == nil && frame.size.width > 0 && frame.size.height > 0) {
-    [self initPAGSurface];
-    return;
+  if (pagSurface == nil && frame.size.width > 0 && frame.size.height > 0) {
+    [self checkVisible];
   }
   if (pagSurface != nil &&
       (oldRect.size.width != frame.size.width || oldRect.size.height != frame.size.height)) {
@@ -150,17 +148,16 @@
 
 - (void)checkVisible {
   BOOL visible = self.window && !self.isHidden && self.alpha > 0.0;
-  if (_isVisible == visible) {
-    return;
-  }
-  _isVisible = visible;
-  if (_isVisible) {
-    [animator setDuration:[pagPlayer duration]];
-    if (pagSurface == nil) {
-      [self initPAGSurface];
+  if (_isVisible != visible) {
+    _isVisible = visible;
+    if (_isVisible) {
+      [animator setDuration:[pagPlayer duration]];
+    } else {
+      [animator setDuration:0];
     }
-  } else {
-    [animator setDuration:0];
+  }
+  if (_isVisible && pagSurface == nil) {
+    [self initPAGSurface];
   }
 }
 
@@ -410,12 +407,48 @@
   [animator update];
 }
 
+- (void)setProgressWithoutUpdate:(double)value {
+  [pagPlayer setProgress:value];
+  [animator setProgress:[pagPlayer getProgress]];
+}
+
+- (BOOL)flushAtProgress:(double)value {
+  [self setProgressWithoutUpdate:value];
+  return [pagPlayer flush];
+}
+
 - (int64_t)currentFrame {
   return [pagPlayer currentFrame];
 }
 
+- (void)prepare {
+  [pagPlayer prepare];
+}
+
+- (BOOL)ensureRenderSurface {
+  [self checkVisible];
+  std::lock_guard<std::mutex> autoLock(lock);
+  return pagSurface != nil && [pagPlayer getSurface] != nil;
+}
+
 - (BOOL)flush {
   return [pagPlayer flush];
+}
+
+- (int64_t)renderingTime {
+  return [pagPlayer renderingTime];
+}
+
+- (int64_t)presentingTime {
+  return [pagPlayer presentingTime];
+}
+
+- (int64_t)imageDecodingTime {
+  return [pagPlayer imageDecodingTime];
+}
+
+- (int64_t)graphicsMemory {
+  return [pagPlayer graphicsMemory];
 }
 
 - (NSArray<PAGLayer*>*)getLayersUnderPoint:(CGPoint)point {

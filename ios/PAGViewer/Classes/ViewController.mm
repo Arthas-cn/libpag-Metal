@@ -18,6 +18,7 @@
 
 #import "ViewController.h"
 #import "BackgroundView.h"
+#import "PAGPerfRunner.h"
 #import <libpag/PAGView.h>
 #import <libpag/PAGImageView.h>
 #import <libpag/PAGDiskCache.h>
@@ -31,6 +32,7 @@
 @property (nonatomic, strong) UIButton* secondButton;
 @property (nonatomic, strong) PAGView* pagView;
 @property (nonatomic, strong) UIView* pagImageViewGroup;
+@property (nonatomic, assign) BOOL perfBenchmarkStarted;
 
 @end
 
@@ -91,7 +93,19 @@
     [self.view addSubview:self.secondButton];
     [self.secondButton addTarget:self action:@selector(secondButtonClicked) forControlEvents:UIControlEventTouchUpInside];
     
-    [self addPAGViewAndPlay];
+    if (![PAGPerfRunner shouldRunFromEnvironment]) {
+        [self addPAGViewAndPlay];
+    }
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (self.perfBenchmarkStarted || ![PAGPerfRunner shouldRunFromEnvironment]) {
+        return;
+    }
+    self.perfBenchmarkStarted = YES;
+    UIView* hostView = self.bgView != nil ? self.bgView : self.view;
+    [PAGPerfRunner runFromEnvironmentInView:hostView];
 }
 
 - (void)addPAGViewAndPlay {

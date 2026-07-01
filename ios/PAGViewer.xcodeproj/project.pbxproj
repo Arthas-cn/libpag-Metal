@@ -75,6 +75,7 @@
 		545B9865278F115400A0112E /* MT2.pag in Resources */ = {isa = PBXBuildFile; fileRef = 545B97E5278F115300A0112E /* MT2.pag */; };
 		545B9867278F115400A0112E /* TextPositionAnimator.pag in Resources */ = {isa = PBXBuildFile; fileRef = 545B97E6278F115300A0112E /* TextPositionAnimator.pag */; };
 		545B9869278F115400A0112E /* motiontile1.pag in Resources */ = {isa = PBXBuildFile; fileRef = 545B97E7278F115300A0112E /* motiontile1.pag */; };
+		C0DE00032F01000100000003 /* PAGPerfRunner.mm in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00022F01000100000002 /* PAGPerfRunner.mm */; };
 		F2BEA12F2B0321F400256135 /* libpag.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2BEA12E2B0321F400256135 /* libpag.framework */; };
 		F2BEA1332B032AEC00256135 /* libpag.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = F2BEA12E2B0321F400256135 /* libpag.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2C7AD5527A9202C00DEBEC6 /* rotation.jpg in Resources */ = {isa = PBXBuildFile; fileRef = F2C7AD5327A91FF600DEBEC6 /* rotation.jpg */; };
@@ -170,6 +171,8 @@
 		545B97E6278F115300A0112E /* TextPositionAnimator.pag */ = {isa = PBXFileReference; lastKnownFileType = file; name = TextPositionAnimator.pag; path = ../../assets/TextPositionAnimator.pag; sourceTree = "<group>"; };
 		545B97E7278F115300A0112E /* motiontile1.pag */ = {isa = PBXFileReference; lastKnownFileType = file; name = motiontile1.pag; path = ../../assets/motiontile1.pag; sourceTree = "<group>"; };
 		5478FF75278EFE3700999C9C /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C0DE00012F01000100000001 /* PAGPerfRunner.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PAGPerfRunner.h; sourceTree = "<group>"; };
+		C0DE00022F01000100000002 /* PAGPerfRunner.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = PAGPerfRunner.mm; sourceTree = "<group>"; };
 		F2BEA12E2B0321F400256135 /* libpag.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = libpag.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2C7AD5327A91FF600DEBEC6 /* rotation.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; name = rotation.jpg; path = ../../assets/rotation.jpg; sourceTree = "<group>"; };
 		F2ED889E1FCBEDF100555707 /* PAGViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PAGViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -282,6 +285,8 @@
 				4DE99A4827BFC16F0003AA0A /* BackgroundView.m */,
 				4DE99A4A27BFC16F0003AA0A /* ViewController.h */,
 				4DE99A4C27BFC16F0003AA0A /* ViewController.mm */,
+				C0DE00012F01000100000001 /* PAGPerfRunner.h */,
+				C0DE00022F01000100000002 /* PAGPerfRunner.mm */,
 			);
 			path = Classes;
 			sourceTree = "<group>";
@@ -461,6 +466,7 @@
 				F2ED88B11FCBEDF100555707 /* main.mm in Sources */,
 				F2ED88A31FCBEDF100555707 /* AppDelegate.mm in Sources */,
 				4DE99A5227BFC16F0003AA0A /* ViewController.mm in Sources */,
+				C0DE00032F01000100000003 /* PAGPerfRunner.mm in Sources */,
 				4DE99A4E27BFC16F0003AA0A /* BackgroundView.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -613,11 +619,14 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMPRESS_PNG_FILES = YES;
-				DEVELOPMENT_TEAM = 36588GHG2N;
+				DEVELOPMENT_TEAM = 6T8UP29CAY;
 				EXPORTED_SYMBOLS_FILE = "";
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c17;
-				HEADER_SEARCH_PATHS = "$(inherited)";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(BUILT_PRODUCTS_DIR)/libpag.framework/Headers",
+				);
 				INFOPLIST_FILE = PAGViewer/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -628,7 +637,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = "$(inherited)";
 				OTHER_LDFLAGS = "$(inherited)";
-				PRODUCT_BUNDLE_IDENTIFIER = io.pag.viewer;
+				PRODUCT_BUNDLE_IDENTIFIER = io.pag.viewer.qipeng.test;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRIP_PNG_TEXT = YES;
@@ -646,11 +655,14 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMPRESS_PNG_FILES = YES;
-				DEVELOPMENT_TEAM = 36588GHG2N;
+				DEVELOPMENT_TEAM = 6T8UP29CAY;
 				EXPORTED_SYMBOLS_FILE = "";
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_C_LANGUAGE_STANDARD = c17;
-				HEADER_SEARCH_PATHS = "$(inherited)";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(BUILT_PRODUCTS_DIR)/libpag.framework/Headers",
+				);
 				INFOPLIST_FILE = PAGViewer/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -661,7 +673,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = "$(inherited)";
 				OTHER_LDFLAGS = "$(inherited)";
-				PRODUCT_BUNDLE_IDENTIFIER = io.pag.viewer;
+				PRODUCT_BUNDLE_IDENTIFIER = io.pag.viewer.qipeng.test;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRIP_PNG_TEXT = YES;

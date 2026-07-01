@@ -67,6 +67,14 @@
 
 - (BOOL)flush;
 
+- (int64_t)renderingTime;
+
+- (int64_t)presentingTime;
+
+- (int64_t)imageDecodingTime;
+
+- (int64_t)graphicsMemory;
+
 - (CGRect)getBounds:(PAGLayer*)pagLayer;
 
 - (NSArray<PAGLayer*>*)getLayersUnderPoint:(CGPoint)point;
