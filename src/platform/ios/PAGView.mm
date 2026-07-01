@@ -95,6 +95,10 @@
 - (void)setBounds:(CGRect)bounds {
   CGRect oldBounds = self.bounds;
   [super setBounds:bounds];
+  if (_isVisible && pagSurface == nil && bounds.size.width > 0 && bounds.size.height > 0) {
+    [self initPAGSurface];
+    return;
+  }
   if (pagSurface != nil &&
       (oldBounds.size.width != bounds.size.width || oldBounds.size.height != bounds.size.height)) {
     [pagSurface updateSize];
@@ -107,6 +111,10 @@
 - (void)setFrame:(CGRect)frame {
   CGRect oldRect = self.frame;
   [super setFrame:frame];
+  if (_isVisible && pagSurface == nil && frame.size.width > 0 && frame.size.height > 0) {
+    [self initPAGSurface];
+    return;
+  }
   if (pagSurface != nil &&
       (oldRect.size.width != frame.size.width || oldRect.size.height != frame.size.height)) {
     [pagSurface updateSize];

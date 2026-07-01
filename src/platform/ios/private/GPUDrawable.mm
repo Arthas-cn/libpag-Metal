@@ -64,6 +64,13 @@ void GPUDrawable::updateSize() {
   auto height = layer.bounds.size.height * layer.contentsScale;
   _width = static_cast<int>(roundf(width));
   _height = static_cast<int>(roundf(height));
+  // MetalWindow reads CAMetalLayer.drawableSize (not bounds). MTKView syncs this
+  // automatically; a raw CAMetalLayer backing UIView must set it explicitly.
+  if (NSThread.isMainThread && _width > 0 && _height > 0) {
+    layer.drawableSize = CGSizeMake(_width, _height);
+  }
+  window = nullptr;
+  surface = nullptr;
 }
 
 std::shared_ptr<tgfx::Device> GPUDrawable::getDevice() {
@@ -114,6 +121,7 @@ std::shared_ptr<tgfx::Surface> GPUDrawable::onCreateSurface(tgfx::Context* conte
 }
 
 void GPUDrawable::onFreeSurface() {
+  window = nullptr;
 }
 
 void GPUDrawable::present(tgfx::Context*) {
