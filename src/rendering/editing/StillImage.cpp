@@ -23,7 +23,12 @@
 #include "rendering/caches/RenderCache.h"
 #include "rendering/graphics/Graphic.h"
 #include "rendering/graphics/Picture.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
 #include "tgfx/gpu/opengl/GLDevice.h"
+#endif
 
 namespace pag {
 std::shared_ptr<PAGImage> PAGImage::FromPath(const std::string& filePath) {
@@ -61,11 +66,13 @@ std::shared_ptr<StillImage> StillImage::MakeFrom(std::shared_ptr<tgfx::Image> im
 }
 
 std::shared_ptr<PAGImage> PAGImage::FromTexture(const BackendTexture& texture, ImageOrigin origin) {
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
   auto context = tgfx::GLDevice::CurrentNativeHandle();
   if (context == nullptr) {
     LOGE("PAGImage.FromTexture() There is no current GPU context on the calling thread.");
     return nullptr;
   }
+#endif
   auto pagImage = std::shared_ptr<StillImage>(new StillImage(texture.width(), texture.height()));
   auto picture = Picture::MakeFrom(pagImage->uniqueID(), ToTGFX(texture), ToTGFX(origin));
   if (!picture) {

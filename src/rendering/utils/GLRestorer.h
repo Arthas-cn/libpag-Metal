@@ -18,7 +18,12 @@
 
 #pragma once
 
-#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32)
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32) && \
+    (!defined(__APPLE__) || !TARGET_OS_IPHONE)
 
 namespace pag {
 

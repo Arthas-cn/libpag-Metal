@@ -151,6 +151,12 @@ ColorType ToPAG(tgfx::ColorType colorType) {
 }
 
 tgfx::BackendTexture ToTGFX(const BackendTexture& texture) {
+  MtlTextureInfo mtlInfo = {};
+  if (texture.getMtlTextureInfo(&mtlInfo)) {
+    tgfx::MetalTextureInfo metalInfo = {};
+    metalInfo.texture = mtlInfo.texture;
+    return tgfx::BackendTexture{metalInfo, texture.width(), texture.height()};
+  }
   GLTextureInfo glInfo = {};
   if (!texture.getGLTextureInfo(&glInfo)) {
     return {};
@@ -163,6 +169,12 @@ tgfx::BackendTexture ToTGFX(const BackendTexture& texture) {
 }
 
 BackendTexture ToPAG(const tgfx::BackendTexture& texture) {
+  tgfx::MetalTextureInfo metalInfo = {};
+  if (texture.getMetalTextureInfo(&metalInfo)) {
+    MtlTextureInfo mtlInfo = {};
+    mtlInfo.texture = const_cast<void*>(metalInfo.texture);
+    return {mtlInfo, texture.width(), texture.height()};
+  }
   tgfx::GLTextureInfo glInfo = {};
   if (!texture.getGLTextureInfo(&glInfo)) {
     return {};
@@ -175,6 +187,12 @@ BackendTexture ToPAG(const tgfx::BackendTexture& texture) {
 }
 
 tgfx::BackendRenderTarget ToTGFX(const BackendRenderTarget& renderTarget) {
+  MtlTextureInfo mtlInfo = {};
+  if (renderTarget.getMtlTextureInfo(&mtlInfo)) {
+    tgfx::MetalTextureInfo metalInfo = {};
+    metalInfo.texture = mtlInfo.texture;
+    return tgfx::BackendRenderTarget(metalInfo, renderTarget.width(), renderTarget.height());
+  }
   GLFrameBufferInfo glInfo = {};
   if (!renderTarget.getGLFramebufferInfo(&glInfo)) {
     return {};

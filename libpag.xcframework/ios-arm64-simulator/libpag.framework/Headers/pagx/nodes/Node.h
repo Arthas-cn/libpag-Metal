@@ -1,0 +1,281 @@
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//  Tencent is pleased to support the open source community by making libpag available.
+//
+//  Copyright (C) 2026 Tencent. All rights reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
+//  except in compliance with the License. You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  unless required by applicable law or agreed to in writing, software distributed under the
+//  license is distributed on an "as is" basis, without warranties or conditions of any kind,
+//  either express or implied. see the license for the specific language governing permissions
+//  and limitations under the license.
+//
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+#pragma once
+
+#include <string>
+#include <unordered_map>
+
+namespace pagx {
+
+/**
+ * NodeType enumerates all types of nodes that can be stored in a PAGX document. This includes
+ * resources (Image, Composition, ColorSources) and elements (geometry, painters, modifiers, etc.).
+ */
+enum class NodeType {
+  // Document
+  /**
+   * The root document node.
+   */
+  Document,
+
+  // Resources
+  /**
+   * A reusable path data resource.
+   */
+  PathData,
+  /**
+   * An image resource.
+   */
+  Image,
+  /**
+   * A composition resource containing layers.
+   */
+  Composition,
+  /**
+   * A solid color source.
+   */
+  SolidColor,
+  /**
+   * A linear gradient color source.
+   */
+  LinearGradient,
+  /**
+   * A radial gradient color source.
+   */
+  RadialGradient,
+  /**
+   * A conic (sweep) gradient color source.
+   */
+  ConicGradient,
+  /**
+   * A diamond gradient color source.
+   */
+  DiamondGradient,
+  /**
+   * An image pattern color source.
+   */
+  ImagePattern,
+  /**
+   * A color stop in a gradient.
+   */
+  ColorStop,
+  /**
+   * An embedded font resource containing glyph data.
+   */
+  Font,
+  /**
+   * A single glyph definition in a Font.
+   */
+  Glyph,
+
+  // Animation
+  /**
+   * An animation timeline.
+   */
+  Animation,
+  /**
+   * A keyed object in an animation.
+   */
+  AnimationObject,
+  /**
+   * A keyed channel in an animation object.
+   */
+  Channel,
+
+  // Layer
+  /**
+   * A layer node that contains vector elements and child layers.
+   */
+  Layer,
+
+  // Layer Styles
+  /**
+   * A drop shadow layer style.
+   */
+  DropShadowStyle,
+  /**
+   * An inner shadow layer style.
+   */
+  InnerShadowStyle,
+  /**
+   * A background blur layer style.
+   */
+  BackgroundBlurStyle,
+  /**
+   * A noise layer style.
+   */
+  NoiseStyle,
+
+  // Layer Filters
+  /**
+   * A blur filter.
+   */
+  BlurFilter,
+  /**
+   * A drop shadow filter.
+   */
+  DropShadowFilter,
+  /**
+   * An inner shadow filter.
+   */
+  InnerShadowFilter,
+  /**
+   * A blend filter.
+   */
+  BlendFilter,
+  /**
+   * A color matrix filter.
+   */
+  ColorMatrixFilter,
+  /**
+   * A noise filter.
+   */
+  NoiseFilter,
+
+  // Elements (geometry, painters, modifiers, containers)
+  /**
+   * A rectangle shape with optional rounded corners.
+   */
+  Rectangle,
+  /**
+   * An ellipse shape defined by center point and size.
+   */
+  Ellipse,
+  /**
+   * A polygon or star shape with configurable points and roundness.
+   */
+  Polystar,
+  /**
+   * A freeform path shape defined by a PathData.
+   */
+  Path,
+  /**
+   * A text element that generates glyphs for rendering.
+   */
+  Text,
+  /**
+   * A fill painter that fills geometry with a color or gradient.
+   */
+  Fill,
+  /**
+   * A stroke painter that outlines geometry with a color or gradient.
+   */
+  Stroke,
+  /**
+   * A path modifier that trims paths to a specified range.
+   */
+  TrimPath,
+  /**
+   * A path modifier that rounds the corners of shapes.
+   */
+  RoundCorner,
+  /**
+   * A path modifier that merges multiple paths using boolean operations.
+   */
+  MergePath,
+  /**
+   * A text animator that modifies text appearance with range-based transformations.
+   */
+  TextModifier,
+  /**
+   * A text animator that places text along a path.
+   */
+  TextPath,
+  /**
+   * A text modifier that controls text layout and alignment within a text box.
+   */
+  TextBox,
+  /**
+   * A container that groups multiple elements with its own transform.
+   */
+  Group,
+  /**
+   * A modifier that creates multiple copies of preceding elements.
+   */
+  Repeater,
+
+  // Text Selectors
+  /**
+   * A range selector for text modifiers.
+   */
+  RangeSelector,
+  /**
+   * A precomposed glyph run for text rendering.
+   */
+  GlyphRun,
+
+  /**
+   * A ViewModel schema that declares properties for data binding.
+   */
+  ViewModel,
+  /**
+   * A property declared in a ViewModel schema.
+   */
+  ViewModelProperty,
+  /**
+   * A binding that connects a ViewModel property to a render node channel.
+   */
+  DataBind,
+  /**
+   * A converter that transforms ViewModel property values before they are applied to render node
+   * channels.
+   */
+  DataConverter
+};
+
+/**
+ * Node is the base class for all shareable nodes in a PAGX document. Nodes can be stored in the
+ * document's resources list and referenced by ID (e.g., "@resourceId"). Each node has a unique
+ * identifier and a type.
+ */
+class Node {
+ public:
+  /**
+   * The unique identifier of this node. Used for referencing the node by ID (e.g., "@id").
+   */
+  std::string id = {};
+
+  /**
+   * Custom data attributes. The keys are stored without the "data-" prefix. Each key must contain
+   * only lowercase letters, digits, and hyphens, must not end with a hyphen, and must have at least
+   * one character. Values are arbitrary strings interpreted by the creating application. These
+   * attributes are not processed at runtime and are used only for passing metadata between tools or
+   * storing debug information.
+   */
+  std::unordered_map<std::string, std::string> customData = {};
+
+  /**
+   * The line number in the source XML file where this node was defined. A value of -1 means no
+   * source line information is available (e.g., programmatically created nodes). Set by
+   * PAGXImporter during parsing.
+   */
+  int sourceLine = -1;
+
+  virtual ~Node() = default;
+
+  /**
+   * Returns the node type of this node.
+   */
+  virtual NodeType nodeType() const = 0;
+
+ protected:
+  Node() = default;
+};
+
+}  // namespace pagx

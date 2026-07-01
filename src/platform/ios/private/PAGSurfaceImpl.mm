@@ -25,7 +25,7 @@
 #include "pag/types.h"
 #include "platform/cocoa/private/PixelBufferUtil.h"
 #include "rendering/drawables/HardwareBufferDrawable.h"
-#include "tgfx/gpu/opengl/eagl/EAGLDevice.h"
+#include "tgfx/gpu/metal/MetalDevice.h"
 
 @interface PAGSurfaceImpl ()
 
@@ -41,7 +41,7 @@
   return _pagSurface;
 }
 
-+ (PAGSurfaceImpl*)FromLayer:(CAEAGLLayer*)layer {
++ (PAGSurfaceImpl*)FromLayer:(CAMetalLayer*)layer {
   auto drawable = pag::GPUDrawable::FromLayer(layer);
   auto surface = pag::PAGSurface::MakeFrom(drawable);
   if (surface == nullptr) {
@@ -50,28 +50,8 @@
   return [[[PAGSurfaceImpl alloc] initWithSurface:surface] autorelease];
 }
 
-#if TARGET_IPHONE_SIMULATOR
-
 + (PAGSurfaceImpl*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer {
-  LOGE("The simulator does not support [PAGSurface FromCVPixelBuffer:].");
-  return nil;
-}
-
-+ (PAGSurfaceImpl*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer
-                             context:(EAGLContext*)eaglContext {
-  LOGE("The simulator does not support [PAGSurface FromCVPixelBuffer:context:].");
-  return nil;
-}
-
-#else
-
-+ (PAGSurfaceImpl*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer {
-  return [PAGSurfaceImpl FromCVPixelBuffer:pixelBuffer context:nil];
-}
-
-+ (PAGSurfaceImpl*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer
-                             context:(EAGLContext*)eaglContext {
-  auto device = tgfx::EAGLDevice::MakeFrom(eaglContext);
+  auto device = tgfx::MetalDevice::Make();
   auto drawable = pag::HardwareBufferDrawable::MakeFrom(pixelBuffer, device);
   auto surface = pag::PAGSurface::MakeFrom(drawable);
   if (surface == nullptr) {
@@ -79,8 +59,6 @@
   }
   return [[[PAGSurfaceImpl alloc] initWithSurface:surface pixelBuffer:pixelBuffer] autorelease];
 }
-
-#endif
 
 + (PAGSurfaceImpl*)MakeOffscreen:(CGSize)size {
   auto surface = pag::PAGSurface::MakeOffscreen(static_cast<int>(roundf(size.width)),

@@ -26,7 +26,12 @@
 #include "rendering/layers/ContentVersion.h"
 #include "rendering/utils/BitmapBuffer.h"
 #include "rendering/utils/LockGuard.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
 #include "tgfx/gpu/opengl/GLDevice.h"
+#endif
 
 namespace pag {
 
@@ -103,7 +108,11 @@ std::vector<TimeRange> PAGDecoder::GetStaticTimeRange(std::shared_ptr<PAGComposi
 
 std::shared_ptr<PAGDecoder> PAGDecoder::MakeFrom(std::shared_ptr<PAGComposition> composition,
                                                  float maxFrameRate, float scale) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  void* sharedContext = nullptr;
+#else
   auto sharedContext = tgfx::GLDevice::CurrentNativeHandle();
+#endif
   if (composition == nullptr || maxFrameRate <= 0 || scale <= 0) {
     return nullptr;
   }

@@ -17,11 +17,22 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "OffscreenDrawable.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+#include "tgfx/gpu/metal/MetalDevice.h"
+#else
 #include "tgfx/gpu/opengl/GLDevice.h"
+#endif
 
 namespace pag {
 std::shared_ptr<OffscreenDrawable> OffscreenDrawable::Make(int width, int height) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  auto device = tgfx::MetalDevice::Make();
+#else
   auto device = tgfx::GLDevice::MakeWithFallback();
+#endif
   if (device == nullptr || width <= 0 || height <= 0) {
     return nullptr;
   }

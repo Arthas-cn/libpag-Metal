@@ -18,18 +18,18 @@
 
 #include "GLRestorer.h"
 
-#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32)
-
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
-#if TARGET_OS_IPHONE
-#include <OpenGLES/ES3/gl.h>
-#else
+#endif
+
+#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32) && \
+    (!defined(__APPLE__) || !TARGET_OS_IPHONE)
+
+#if defined(__APPLE__)
 #ifndef GL_SILENCE_DEPRECATION
 #define GL_SILENCE_DEPRECATION
 #endif
 #include <OpenGL/gl3.h>
-#endif
 #elif defined(__ANDROID__) || defined(ANDROID) || defined(__OHOS__) || defined(_WIN32)
 #include <GLES3/gl3.h>
 #else

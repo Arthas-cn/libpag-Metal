@@ -46,8 +46,8 @@ std::atomic<bool> appInactive{false};
 
 // Registers global willResignActive / didBecomeActive observers once. The blocks run on a
 // dedicated NSOperationQueue (not the main thread), so they bypass the synchronous-observer
-// ordering that lets EAGLDevice::finish() acquire device.locker first and stall the main
-// thread before HardwareDecoder gets a chance to abort its in-progress VT decode.
+// ordering that lets the main thread drain GPU/video resources while HardwareDecoder is still
+// blocked in an in-progress VT decode.
 void RegisterAppLifecycleObserversOnce() {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -221,21 +221,21 @@ bool HardwareDecoder::resetVideoToolBox() {
 
   // create decompression session
   CFDictionaryRef attrs = NULL;
-  const void* keys[] = {kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferOpenGLESCompatibilityKey,
+  const void* keys[] = {kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferMetalCompatibilityKey,
                         kCVPixelBufferIOSurfacePropertiesKey};
 
-  uint32_t openGLESCompatibility = true;
+  uint32_t metalCompatibility = true;
   uint32_t pixelFormatType = tgfx::IsLimitedYUVColorRange(sourceColorSpace)
                                  ? kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
                                  : kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
 
   CFNumberRef pixelFormatTypeValue = CFNumberCreate(NULL, kCFNumberSInt32Type, &pixelFormatType);
-  CFNumberRef openGLESCompatibilityValue =
-      CFNumberCreate(NULL, kCFNumberSInt32Type, &openGLESCompatibility);
+  CFNumberRef metalCompatibilityValue =
+      CFNumberCreate(NULL, kCFNumberSInt32Type, &metalCompatibility);
   CFDictionaryRef ioSurfaceParam =
       CFDictionaryCreate(kCFAllocatorDefault, NULL, NULL, 0, NULL, NULL);
 
-  const void* values[] = {pixelFormatTypeValue, openGLESCompatibilityValue, ioSurfaceParam};
+  const void* values[] = {pixelFormatTypeValue, metalCompatibilityValue, ioSurfaceParam};
 
   attrs = CFDictionaryCreate(NULL, keys, values, 3, NULL, NULL);
 
@@ -250,7 +250,7 @@ bool HardwareDecoder::resetVideoToolBox() {
 
   CFRelease(attrs);
   CFRelease(pixelFormatTypeValue);
-  CFRelease(openGLESCompatibilityValue);
+  CFRelease(metalCompatibilityValue);
   CFRelease(ioSurfaceParam);
 
   if (@available(iOS 10.0, *)) {
@@ -346,8 +346,8 @@ pag::DecodingResult HardwareDecoder::onDecodeFrame() {
   // Fast-fail while the app is inactive (between willResignActive and didBecomeActive).
   // Calling VTDecompressionSessionDecodeFrame in this window may block indefinitely because
   // iOS suspends the hardware decoder pipeline as the app heads to the background; returning
-  // Error here lets the caller release device.locker so the main thread can complete
-  // EAGLDevice::finish() within the watchdog window.
+  // Error here lets the caller release device.locker so the main thread can complete GPU/video
+  // teardown within the watchdog window.
   if (appInactive.load(std::memory_order_acquire)) {
     return DecodingResult::Error;
   }

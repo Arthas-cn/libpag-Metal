@@ -17,6 +17,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 #import "PAGView.h"
+#import <Metal/Metal.h>
 #import "PAGPlayer.h"
 #import "PAGSurface.h"
 #import "platform/cocoa/private/PAGAnimator.h"
@@ -48,6 +49,11 @@
   filePath = nil;
   self.contentScaleFactor = [UIScreen mainScreen].scale;
   self.backgroundColor = [UIColor clearColor];
+  CAMetalLayer* metalLayer = (CAMetalLayer*)self.layer;
+  metalLayer.contentsScale = self.contentScaleFactor;
+  metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+  metalLayer.framebufferOnly = NO;
+  metalLayer.opaque = NO;
   pagPlayer = [[PAGPlayer alloc] init];
   animator = [[PAGAnimator alloc] initWithUpdater:(id<PAGAnimatorUpdater>)self];
   listeners = [[NSHashTable weakObjectsHashTable] retain];
@@ -83,7 +89,7 @@
 }
 
 + (Class)layerClass {
-  return [CAEAGLLayer class];
+  return [CAMetalLayer class];
 }
 
 - (void)setBounds:(CGRect)bounds {
@@ -113,6 +119,7 @@
 - (void)setContentScaleFactor:(CGFloat)scaleFactor {
   CGFloat oldScaleFactor = self.contentScaleFactor;
   [super setContentScaleFactor:scaleFactor];
+  ((CAMetalLayer*)self.layer).contentsScale = scaleFactor;
   if (pagSurface != nil && oldScaleFactor != scaleFactor) {
     [pagSurface updateSize];
   }
@@ -150,7 +157,7 @@
 }
 
 - (void)initPAGSurface {
-  CAEAGLLayer* layer = (CAEAGLLayer*)[self layer];
+  CAMetalLayer* layer = (CAMetalLayer*)[self layer];
   pagSurface = [[PAGSurface FromLayer:layer] retain];
   [pagPlayer setSurface:pagSurface];
   [animator update];

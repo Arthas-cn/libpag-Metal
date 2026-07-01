@@ -25,12 +25,9 @@
 
 @interface PAGSurfaceImpl : NSObject
 
-+ (PAGSurfaceImpl*)FromLayer:(CAEAGLLayer*)layer;
++ (PAGSurfaceImpl*)FromLayer:(CAMetalLayer*)layer;
 
 + (PAGSurfaceImpl*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer;
-
-+ (PAGSurfaceImpl*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer
-                             context:(EAGLContext*)eaglContext;
 
 + (PAGSurfaceImpl*)MakeOffscreen:(CGSize)size;
 

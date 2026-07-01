@@ -22,7 +22,12 @@
 #include "rendering/caches/RenderCache.h"
 #include "rendering/drawables/Drawable.h"
 #include "rendering/graphics/Recorder.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
 #include "rendering/utils/GLRestorer.h"
+#endif
 #include "rendering/utils/LockGuard.h"
 #include "rendering/utils/shaper/TextShaper.h"
 #include "tgfx/core/Clock.h"
@@ -32,7 +37,8 @@ namespace pag {
 PAGSurface::PAGSurface(std::shared_ptr<Drawable> drawable, bool externalContext)
     : drawable(std::move(drawable)), externalContext(externalContext) {
   rootLocker = std::make_shared<std::mutex>();
-#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32)
+#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32) && \
+    (!defined(__APPLE__) || !TARGET_OS_IPHONE)
   if (externalContext) {
     glRestorer = new GLRestorer();
   }
@@ -40,7 +46,8 @@ PAGSurface::PAGSurface(std::shared_ptr<Drawable> drawable, bool externalContext)
 }
 
 PAGSurface::~PAGSurface() {
-#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32)
+#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32) && \
+    (!defined(__APPLE__) || !TARGET_OS_IPHONE)
   delete static_cast<GLRestorer*>(glRestorer);
 #endif
 }
@@ -235,10 +242,14 @@ bool PAGSurface::draw(RenderCache* cache, std::shared_ptr<Graphic> graphic,
   } else {
     tgfx::BackendSemaphore semaphore = {};
     recording = context->flush(&semaphore);
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
     tgfx::GLSyncInfo signalInfo = {};
     if (semaphore.getGLSync(&signalInfo)) {
       signalSemaphore->initGL(signalInfo.sync);
     }
+#else
+    (void)signalSemaphore;
+#endif
   }
   cache->detachFromContext();
   context->submit(std::move(recording));
@@ -299,7 +310,8 @@ tgfx::Context* PAGSurface::lockContext() {
     return nullptr;
   }
   auto context = device->lockContext();
-#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32)
+#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32) && \
+    (!defined(__APPLE__) || !TARGET_OS_IPHONE)
   if (context != nullptr && glRestorer != nullptr) {
     static_cast<GLRestorer*>(glRestorer)->save();
   }
@@ -308,7 +320,8 @@ tgfx::Context* PAGSurface::lockContext() {
 }
 
 void PAGSurface::unlockContext() {
-#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32)
+#if !defined(PAG_BUILD_FOR_WEB) && !defined(_WIN32) && \
+    (!defined(__APPLE__) || !TARGET_OS_IPHONE)
   if (glRestorer != nullptr) {
     static_cast<GLRestorer*>(glRestorer)->restore();
   }

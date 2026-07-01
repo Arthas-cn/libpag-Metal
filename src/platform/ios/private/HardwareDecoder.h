@@ -45,7 +45,7 @@ class HardwareDecoder : public VideoDecoder {
   /**
    * Aborts any in-progress synchronous decompression by invalidating the underlying VT session.
    * Safe to call from any thread. Used by the willResignActive observer to unblock the worker
-   * thread so it can release device.locker before the main thread enters EAGLDevice::finish().
+   * thread so it can release device.locker before the main thread drains GPU/video resources.
    */
   void invalidateSession();
 

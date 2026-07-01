@@ -19,7 +19,7 @@
 #pragma once
 
 #include "rendering/drawables/Drawable.h"
-#include "tgfx/gpu/opengl/eagl/EAGLWindow.h"
+#include "tgfx/gpu/metal/MetalWindow.h"
 
 namespace pag {
 
@@ -27,7 +27,7 @@ extern NSString* const AsyncSurfacePreparedNotification;
 
 class GPUDrawable : public Drawable {
  public:
-  static std::shared_ptr<GPUDrawable> FromLayer(CAEAGLLayer* layer);
+  static std::shared_ptr<GPUDrawable> FromLayer(CAMetalLayer* layer);
 
   int width() const override;
 
@@ -48,11 +48,11 @@ class GPUDrawable : public Drawable {
   std::weak_ptr<GPUDrawable> weakThis;
   int _width = 0;
   int _height = 0;
-  CAEAGLLayer* layer = nil;
-  std::shared_ptr<tgfx::EAGLWindow> window = nullptr;
+  CAMetalLayer* layer = nil;
+  std::shared_ptr<tgfx::MetalWindow> window = nullptr;
   std::atomic<bool> bufferPreparing = false;
 
-  explicit GPUDrawable(CAEAGLLayer* layer);
+  explicit GPUDrawable(CAMetalLayer* layer);
 
   void tryCreateSurface();
 };

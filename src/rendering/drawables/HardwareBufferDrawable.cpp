@@ -17,7 +17,14 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "HardwareBufferDrawable.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+#include "tgfx/gpu/metal/MetalDevice.h"
+#else
 #include "tgfx/gpu/opengl/GLDevice.h"
+#endif
 #include "tgfx/platform/HardwareBuffer.h"
 
 namespace pag {
@@ -28,7 +35,11 @@ std::shared_ptr<HardwareBufferDrawable> HardwareBufferDrawable::MakeFrom(
     return nullptr;
   }
   if (device == nullptr) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    device = tgfx::MetalDevice::Make();
+#else
     device = tgfx::GLDevice::MakeWithFallback();
+#endif
   }
   if (device == nullptr) {
     return nullptr;

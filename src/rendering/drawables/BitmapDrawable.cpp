@@ -17,10 +17,21 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "BitmapDrawable.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+#include "tgfx/gpu/metal/MetalDevice.h"
+#else
 #include "tgfx/gpu/opengl/GLDevice.h"
+#endif
 
 namespace pag {
 std::shared_ptr<BitmapDrawable> BitmapDrawable::Make(int width, int height, void* sharedContext) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  (void)sharedContext;
+  auto device = tgfx::MetalDevice::Make();
+#else
   std::shared_ptr<tgfx::GLDevice> device = nullptr;
   if (sharedContext != nullptr) {
     device = tgfx::GLDevice::Make(sharedContext);
@@ -28,6 +39,7 @@ std::shared_ptr<BitmapDrawable> BitmapDrawable::Make(int width, int height, void
   if (device == nullptr) {
     device = tgfx::GLDevice::MakeWithFallback();
   }
+#endif
   if (device == nullptr || width <= 0 || height <= 0) {
     return nullptr;
   }

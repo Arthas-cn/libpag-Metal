@@ -22,7 +22,12 @@
 #include "rendering/caches/RenderCache.h"
 #include "tgfx/core/Clock.h"
 #include "tgfx/core/Surface.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
 #include "tgfx/gpu/opengl/GLDevice.h"
+#endif
 
 namespace pag {
 static std::shared_ptr<tgfx::Image> RescaleImage(tgfx::Context* context,
@@ -261,7 +266,15 @@ class BackendTextureProxy : public ImageProxy {
  public:
   BackendTextureProxy(ID assetID, const tgfx::BackendTexture& texture, tgfx::ImageOrigin origin,
                       void* sharedContext)
-      : assetID(assetID), backendTexture(texture), origin(origin), sharedContext(sharedContext) {
+      : assetID(assetID), backendTexture(texture), origin(origin)
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
+        ,
+        sharedContext(sharedContext)
+#endif
+  {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    (void)sharedContext;
+#endif
   }
 
   int width() const override {
@@ -296,9 +309,15 @@ class BackendTextureProxy : public ImageProxy {
   ID assetID = 0;
   tgfx::BackendTexture backendTexture = {};
   tgfx::ImageOrigin origin = tgfx::ImageOrigin::TopLeft;
+#if !defined(__APPLE__) || !TARGET_OS_IPHONE
   void* sharedContext = nullptr;
+#endif
 
   bool checkContext(tgfx::Context* context) const {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    (void)context;
+    return true;
+#else
     auto glDevice = static_cast<tgfx::GLDevice*>(context->device());
     if (!glDevice->sharableWith(sharedContext)) {
       LOGE(
@@ -307,6 +326,7 @@ class BackendTextureProxy : public ImageProxy {
       return false;
     }
     return true;
+#endif
   }
 };
 
@@ -335,10 +355,14 @@ std::shared_ptr<Graphic> Picture::MakeFrom(ID assetID, const tgfx::BackendTextur
   if (!texture.isValid()) {
     return nullptr;
   }
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  void* context = nullptr;
+#else
   auto context = tgfx::GLDevice::CurrentNativeHandle();
   if (context == nullptr) {
     return nullptr;
   }
+#endif
   auto proxy = std::make_shared<BackendTextureProxy>(assetID, texture, origin, context);
   return std::make_shared<ImageProxyPicture>(assetID, proxy);
 }

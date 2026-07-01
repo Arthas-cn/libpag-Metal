@@ -23,7 +23,14 @@
 #include "rendering/drawables/OffscreenDrawable.h"
 #include "rendering/drawables/RenderTargetDrawable.h"
 #include "rendering/drawables/TextureDrawable.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+#include "tgfx/gpu/metal/MetalDevice.h"
+#else
 #include "tgfx/gpu/opengl/GLDevice.h"
+#endif
 
 namespace pag {
 std::shared_ptr<PAGSurface> PAGSurface::MakeFrom(std::shared_ptr<Drawable> drawable) {
@@ -35,7 +42,11 @@ std::shared_ptr<PAGSurface> PAGSurface::MakeFrom(std::shared_ptr<Drawable> drawa
 
 std::shared_ptr<PAGSurface> PAGSurface::MakeFrom(const BackendRenderTarget& renderTarget,
                                                  ImageOrigin origin) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  auto device = tgfx::MetalDevice::Make();
+#else
   auto device = tgfx::GLDevice::Current();
+#endif
   auto drawable = RenderTargetDrawable::MakeFrom(device, ToTGFX(renderTarget), ToTGFX(origin));
   if (drawable == nullptr) {
     return nullptr;
@@ -47,6 +58,10 @@ std::shared_ptr<PAGSurface> PAGSurface::MakeFrom(const BackendTexture& texture, 
                                                  bool forAsyncThread) {
   std::shared_ptr<tgfx::Device> device = nullptr;
   bool externalContext = false;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  (void)forAsyncThread;
+  device = tgfx::MetalDevice::Make();
+#else
   if (forAsyncThread) {
     auto sharedContext = tgfx::GLDevice::CurrentNativeHandle();
     device = tgfx::GLDevice::Make(sharedContext);
@@ -55,6 +70,7 @@ std::shared_ptr<PAGSurface> PAGSurface::MakeFrom(const BackendTexture& texture, 
     device = tgfx::GLDevice::Current();
     externalContext = true;
   }
+#endif
   auto drawable = TextureDrawable::MakeFrom(device, ToTGFX(texture), ToTGFX(origin));
   if (drawable == nullptr) {
     return nullptr;

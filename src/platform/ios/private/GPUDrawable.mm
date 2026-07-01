@@ -21,7 +21,7 @@
 namespace pag {
 NSString* const AsyncSurfacePreparedNotification = @"io.pag.AsyncSurfacePrepared";
 
-std::shared_ptr<GPUDrawable> GPUDrawable::FromLayer(CAEAGLLayer* layer) {
+std::shared_ptr<GPUDrawable> GPUDrawable::FromLayer(CAMetalLayer* layer) {
   if (layer == nil) {
     return nullptr;
   }
@@ -30,7 +30,7 @@ std::shared_ptr<GPUDrawable> GPUDrawable::FromLayer(CAEAGLLayer* layer) {
   return drawable;
 }
 
-GPUDrawable::GPUDrawable(CAEAGLLayer* layer) : layer(layer) {
+GPUDrawable::GPUDrawable(CAMetalLayer* layer) : layer(layer) {
   // do not retain layer here, otherwise it can cause circular reference.
   updateSize();
   tryCreateSurface();
@@ -42,7 +42,7 @@ void GPUDrawable::tryCreateSurface() {
   if (!NSThread.isMainThread || _width <= 0 || _height <= 0) {
     return;
   }
-  window = tgfx::EAGLWindow::MakeFrom(layer);
+  window = tgfx::MetalWindow::MakeFrom(layer);
   if (window != nullptr) {
     auto device = window->getDevice();
     auto context = device->lockContext();
@@ -71,7 +71,7 @@ std::shared_ptr<tgfx::Device> GPUDrawable::getDevice() {
     return nullptr;
   }
   if (window == nullptr) {
-    window = tgfx::EAGLWindow::MakeFrom(layer);
+    window = tgfx::MetalWindow::MakeFrom(layer);
   }
   return window ? window->getDevice() : nullptr;
 }

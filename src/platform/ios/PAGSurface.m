@@ -32,7 +32,7 @@
   return _surface;
 }
 
-+ (PAGSurface*)FromLayer:(CAEAGLLayer*)layer {
++ (PAGSurface*)FromLayer:(CAMetalLayer*)layer {
   PAGSurfaceImpl* surface = [PAGSurfaceImpl FromLayer:layer];
   if (surface == nil) {
     return nil;
@@ -44,16 +44,6 @@
 
 + (PAGSurface*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer {
   PAGSurfaceImpl* surface = [PAGSurfaceImpl FromCVPixelBuffer:pixelBuffer];
-  if (surface == nil) {
-    return nil;
-  }
-  PAGSurface* pagSurface = [[[PAGSurface alloc] init] autorelease];
-  pagSurface.surface = surface;
-  return pagSurface;
-}
-
-+ (PAGSurface*)FromCVPixelBuffer:(CVPixelBufferRef)pixelBuffer context:(EAGLContext*)eaglContext {
-  PAGSurfaceImpl* surface = [PAGSurfaceImpl FromCVPixelBuffer:pixelBuffer context:eaglContext];
   if (surface == nil) {
     return nil;
   }
