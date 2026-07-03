@@ -20,6 +20,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
+#import <libpag/PAG.h>
 #import <libpag/PAGPlayer.h>
 #import <libpag/PAGSurface.h>
 #import <libpag/PAGView.h>
@@ -45,7 +46,7 @@ NSInteger const kDefaultLayerFrameBatch = 1;
 NSInteger const kDefaultLogFlushFrames = 120;
 
 uint64_t NowInMicroseconds() {
-  static mach_timebase_info_data_t timebase = {};
+  static mach_timebase_info_data_t timebase = {0, 0};
   if (timebase.denom == 0) {
     mach_timebase_info(&timebase);
   }
@@ -100,7 +101,7 @@ NSString* JSONString(NSString* value) {
 }
 
 NSString* DeviceModel() {
-  struct utsname systemInfo = {};
+  struct utsname systemInfo = {0};
   uname(&systemInfo);
   return [NSString stringWithUTF8String:systemInfo.machine];
 }
@@ -174,11 +175,11 @@ NSInteger FrameCountForFile(PAGFile* file, NSInteger maxFrames) {
 }
 
 NSString* PerfBackend() {
-  return @"metal";
+  return [PAGPerfTrace Backend];
 }
 
 NSString* PerfBuildID() {
-  return @"fcca14ec";
+  return [PAGPerfTrace BuildID];
 }
 
 NSString* RenderTargetName() {
@@ -547,6 +548,9 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
 @property(nonatomic, assign) NSInteger frame;
 @property(nonatomic, assign) NSInteger frameCount;
 @property(nonatomic, assign) NSInteger totalRuns;
+@property(nonatomic, assign) uint64_t loadUs;
+@property(nonatomic, assign) uint64_t setupUs;
+@property(nonatomic, assign) uint64_t surfaceReadyUs;
 @property(nonatomic, assign) BOOL runStarted;
 @property(nonatomic, assign) BOOL finished;
 @property(nonatomic, assign) BOOL awaitingRenderReady;
@@ -746,7 +750,9 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
     return;
   }
 
+  uint64_t loadStartUs = NowInMicroseconds();
   self.file = [PAGFile Load:path];
+  self.loadUs = NowInMicroseconds() - loadStartUs;
   if (self.file == nil) {
     [self logLineAndFlush:[NSString stringWithFormat:@"{\"schema\":%ld,\"event\":\"load_failed\","
                                                   "\"backend\":%@,\"build_id\":%@,\"case\":%@,\"path\":%@}",
@@ -757,16 +763,27 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
     self.caseIndex++;
     return;
   }
-  [self logLine:[NSString stringWithFormat:@"{\"schema\":%ld,\"event\":\"load_ok\","
-                                  "\"backend\":%@,\"build_id\":%@,\"case\":%@,\"path\":%@}",
+  [self logLine:[NSString stringWithFormat:@"{\"schema\":%ld,\"event\":\"asset_load\","
+                                  "\"backend\":%@,\"build_id\":%@,\"case\":%@,\"path\":%@,"
+                                  "\"load_us\":%llu,\"width\":%ld,\"height\":%ld,"
+                                  "\"duration_us\":%lld,\"frame_rate\":%.3f}",
                                     static_cast<long>(kPerfSchemaVersion),
                                     JSONString(self.backend), JSONString(self.buildID),
-                                    JSONString(self.caseName), JSONString(path)]];
+                                    JSONString(self.caseName), JSONString(path), self.loadUs,
+                                    static_cast<long>([self.file width]),
+                                    static_cast<long>([self.file height]), [self.file duration],
+                                    [self.file frameRate]]];
 
   self.size = CGSizeMake(MAX(1, [self.file width]), MAX(1, [self.file height]));
   self.context = [self makeContext];
   NSString* setupError = nil;
-  if (![self.context setupWithFile:self.file size:self.size hostView:self.hostView error:&setupError]) {
+  uint64_t setupStartUs = NowInMicroseconds();
+  BOOL setupOK = [self.context setupWithFile:self.file
+                                        size:self.size
+                                    hostView:self.hostView
+                                       error:&setupError];
+  self.setupUs = NowInMicroseconds() - setupStartUs;
+  if (!setupOK) {
     [self logLineAndFlush:[NSString stringWithFormat:@"{\"schema\":%ld,\"event\":\"setup_failed\","
                                                   "\"backend\":%@,\"build_id\":%@,\"case\":%@,"
                                                   "\"render_target\":%@,\"error\":%@}",
@@ -774,7 +791,7 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
                                                     JSONString(self.backend), JSONString(self.buildID),
                                                     JSONString(self.caseName),
                                                     JSONString(self.context.renderTarget),
-                                                    JSONString(setupError ?: @"unknown")]
+                                                    JSONString(setupError != nil ? setupError : @"unknown")]
               synchronize:NO];
     [self.context teardown];
     self.context = nil;
@@ -796,6 +813,7 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
                                           "\"backend\":%@,\"build_id\":%@,\"case\":%@,"
                                           "\"width\":%.0f,\"height\":%.0f,\"frame_rate\":%.3f,"
                                           "\"duration_us\":%lld,\"frames\":%ld,\"total_runs\":%ld,"
+                                          "\"load_us\":%llu,\"setup_us\":%llu,"
                                           "\"render_target\":%@,\"layer_class\":%@,\"gpu_name\":%@}",
                                             static_cast<long>(kPerfSchemaVersion),
                                             JSONString(self.backend), JSONString(self.buildID),
@@ -803,6 +821,7 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
                                             [self.file frameRate], [self.file duration],
                                             static_cast<long>(self.frameCount),
                                             static_cast<long>(self.totalRuns),
+                                            self.loadUs, self.setupUs,
                                             JSONString(self.context.renderTarget),
                                             JSONString(self.context.layerClass),
                                             JSONString(self.gpuName)]
@@ -811,32 +830,35 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
 
 - (BOOL)ensureRenderReady {
   __block BOOL logged = NO;
+  uint64_t readyStartUs = NowInMicroseconds();
   BOOL ready = [self.context ensureReadyWithLog:^(NSString* event, NSDictionary* fields) {
     if (logged) {
       return;
     }
     logged = YES;
+    self.surfaceReadyUs = NowInMicroseconds() - readyStartUs;
     [self logLine:[NSString stringWithFormat:@"{\"schema\":%ld,\"event\":%@,"
                                   "\"backend\":%@,\"build_id\":%@,\"case\":%@,"
                                   "\"width\":%.0f,\"height\":%.0f,\"layer_class\":%@,"
-                                  "\"gpu_name\":%@}",
+                                  "\"gpu_name\":%@,\"surface_ready_us\":%llu}",
                               static_cast<long>(kPerfSchemaVersion), JSONString(event),
                               JSONString(self.backend), JSONString(self.buildID),
                               JSONString(self.caseName),
                               [fields[@"width"] doubleValue], [fields[@"height"] doubleValue],
                               JSONString(fields[@"layer_class"]),
-                              JSONString(fields[@"gpu_name"])]];
+                              JSONString(fields[@"gpu_name"]), self.surfaceReadyUs]];
   }];
   if (ready && !logged && ![self.context.renderTarget isEqualToString:@"layer"]) {
+    self.surfaceReadyUs = NowInMicroseconds() - readyStartUs;
     [self logLine:[NSString stringWithFormat:@"{\"schema\":%ld,\"event\":\"surface_ready\","
                                   "\"backend\":%@,\"build_id\":%@,\"case\":%@,"
                                   "\"width\":%.0f,\"height\":%.0f,\"render_target\":%@,"
-                                  "\"gpu_name\":%@}",
+                                  "\"gpu_name\":%@,\"surface_ready_us\":%llu}",
                               static_cast<long>(kPerfSchemaVersion),
                               JSONString(self.backend), JSONString(self.buildID),
                               JSONString(self.caseName), self.size.width, self.size.height,
                               JSONString(self.context.renderTarget),
-                              JSONString(self.gpuName)]];
+                              JSONString(self.gpuName), self.surfaceReadyUs]];
   }
   return ready;
 }
@@ -961,11 +983,7 @@ FramePerfMetrics SampleViewFrame(PAGView* pagView, double progress) {
   if (configuredValue.length > 0) {
     return IsTruthy(configuredValue);
   }
-#if DEBUG
-  return YES;
-#else
   return NO;
-#endif
 }
 
 + (void)runFromEnvironment {

@@ -7,8 +7,6 @@ childProcess.execSync("depsync");
 process.argv.push("../");
 process.argv.push("-w");
 const defaultDefines = [
-    "-DPAG_USE_OPENGL=OFF",
-    "-DTGFX_USE_METAL=ON",
     "-DDEPLOYMENT_TARGET=15.0",
 ];
 for (const define of defaultDefines) {

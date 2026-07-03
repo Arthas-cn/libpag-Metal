@@ -33,3 +33,22 @@ PAG_API @interface PAG : NSObject
 + (NSString*)SDKVersion;
 
 @end
+
+PAG_API @interface PAGPerfTrace : NSObject
+
++ (void)StartSessionWithScenario:(NSString*)scenario;
++ (void)SetEnabled:(BOOL)enabled;
++ (BOOL)Enabled;
++ (void)LogEvent:(NSString*)event fields:(NSDictionary*)fields;
++ (void)Flush;
++ (void)Close;
+
++ (NSString*)CurrentLogPath;
++ (NSString*)LogsDirectory;
++ (NSArray<NSString*>*)LogFiles;
++ (NSUInteger)RemoveLogFilesSkippingCurrent:(BOOL)skipCurrent;
+
++ (NSString*)Backend;
++ (NSString*)BuildID;
+
+@end

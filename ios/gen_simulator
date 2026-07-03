@@ -6,6 +6,14 @@ childProcess.execSync("depsync");
 
 process.argv.push("../");
 process.argv.push("-w");
+const defaultDefines = [
+    "-DDEPLOYMENT_TARGET=15.0",
+];
+for (const define of defaultDefines) {
+    if (!process.argv.some((arg) => arg === define || arg.startsWith(define.split("=")[0] + "="))) {
+        process.argv.push(define);
+    }
+}
 let args = process.argv.slice(2);
 if (args.indexOf("-p") === -1 && args.indexOf("--platform") === -1) {
     process.argv.push("-p");
