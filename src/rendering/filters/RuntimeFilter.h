@@ -34,6 +34,7 @@ namespace pag {
 
 struct FilterResources {
   std::shared_ptr<tgfx::RenderPipeline> pipeline = nullptr;
+  std::shared_ptr<tgfx::RenderPipeline> nonMSAAPipeline = nullptr;
   std::shared_ptr<tgfx::Sampler> sampler = nullptr;
 
   virtual ~FilterResources() = default;
@@ -127,8 +128,14 @@ class RuntimeFilter : public tgfx::RuntimeEffect {
 
   std::shared_ptr<tgfx::RenderPipeline> getPipeline(tgfx::GPU* gpu) const;
 
+  std::shared_ptr<tgfx::RenderPipeline> getPipelineForDraw(FilterResources* resources,
+                                                           tgfx::GPU* gpu,
+                                                           int effectiveSampleCount,
+                                                           tgfx::PixelFormat colorFormat) const;
+
  private:
-  std::shared_ptr<tgfx::RenderPipeline> createPipeline(tgfx::GPU* gpu) const;
+  std::shared_ptr<tgfx::RenderPipeline> createPipeline(tgfx::GPU* gpu, int msaaSampleCount,
+                                                     tgfx::PixelFormat colorFormat) const;
 };
 
 }  // namespace pag
