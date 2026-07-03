@@ -248,12 +248,45 @@ PAG_API @interface PAGView : UIView
 - (int64_t)currentFrame;
 
 /**
+ * Prepares the player for the next flush() call.
+ */
+- (void)prepare;
+
+/**
+ * Ensures the layer-backed render surface is created when the view is in a window.
+ */
+- (BOOL)ensureRenderSurface;
+
+/**
+ * Sets progress on the player without triggering an implicit animator flush.
+ * Pair with flush() for deterministic benchmark sampling.
+ */
+- (void)setProgressWithoutUpdate:(double)value;
+
+/**
+ * Sets progress and flushes once. This matches the documented manual rendering path
+ * without the extra flush triggered by setProgress:.
+ */
+- (BOOL)flushAtProgress:(double)value;
+
+/**
  * Call this method to render current position immediately. Note that all the changes previously
  * made to the PAGView will only take effect after this method is called. If the play() method is
  * already called, there is no need to call it manually since it will be automatically called every
  * frame. Returns true if the content has changed.
  */
 - (BOOL)flush;
+
+/**
+ * The time cost by the last flush() call in microseconds.
+ */
+- (int64_t)renderingTime;
+
+- (int64_t)presentingTime;
+
+- (int64_t)imageDecodingTime;
+
+- (int64_t)graphicsMemory;
 
 /**
  * Returns an array of layers that lie under the specified point.

@@ -18,6 +18,8 @@
 
 #import "PAGImageView.h"
 #include <VideoToolbox/VideoToolbox.h>
+#include <algorithm>
+#include <mach/mach_time.h>
 #include <mutex>
 
 #include "base/utils/TimeUtil.h"
@@ -26,6 +28,7 @@
 
 #import "PAGFile.h"
 #import "platform/cocoa/PAGDiskCache.h"
+#import "platform/cocoa/PAG.h"
 #import "platform/cocoa/private/PAGAnimator.h"
 #import "platform/cocoa/private/PAGLayer+Internal.h"
 #import "platform/cocoa/private/PAGLayerImpl+Internal.h"
@@ -43,6 +46,28 @@ void DestoryImageViewFlushQueue() {
 }  // namespace pag
 
 static const float DEFAULT_MAX_FRAMERATE = 30.0;
+
+static uint64_t PAGPerfNowInMicroseconds() {
+  static mach_timebase_info_data_t timebase = {0, 0};
+  if (timebase.denom == 0) {
+    mach_timebase_info(&timebase);
+  }
+  uint64_t now = mach_absolute_time();
+  return now * timebase.numer / timebase.denom / 1000;
+}
+
+static NSInteger PAGPerfViewIndex(UIView* view) {
+  NSString* identifier = view.accessibilityIdentifier;
+  NSString* prefix = @"pag_image_view_";
+  if (![identifier hasPrefix:prefix]) {
+    return -1;
+  }
+  return [[identifier substringFromIndex:prefix.length] integerValue];
+}
+
+static NSString* PAGPerfCaseName(NSString* path) {
+  return path.length > 0 ? [path lastPathComponent] : @"";
+}
 
 #ifndef dispatch_main_async_safe
 #define dispatch_main_async_safe(block)                         \
@@ -87,6 +112,20 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
   CVPixelBufferPoolRef diskBufferPool;
   NSHashTable* listeners;
   std::mutex listenerLock;
+  uint64_t tracePlaybackStartUs;
+  uint64_t traceFrameTotalUs;
+  uint64_t traceFrameMaxUs;
+  uint64_t traceLastReadFrameUs;
+  uint64_t traceLastSequenceReadUs;
+  uint64_t traceLastRenderFrameUs;
+  uint64_t traceLastSequenceWriteUs;
+  uint64_t traceLastDecoderReadTotalUs;
+  uint64_t traceLastUIImageUs;
+  NSUInteger traceFrameSamples;
+  BOOL traceLastCacheHit;
+  BOOL traceLastSequenceCacheHit;
+  BOOL traceLastRenderedFrame;
+  BOOL traceCompletedLoop;
 }
 
 @synthesize memoryCacheEnabled = _memoryCacheEnabled;
@@ -116,6 +155,20 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
   animator = [[PAGAnimator alloc] initWithUpdater:(id<PAGAnimatorUpdater>)self];
   listeners = [[NSHashTable weakObjectsHashTable] retain];
   [animator addListener:self];
+  tracePlaybackStartUs = 0;
+  traceFrameTotalUs = 0;
+  traceFrameMaxUs = 0;
+  traceLastReadFrameUs = 0;
+  traceLastSequenceReadUs = 0;
+  traceLastRenderFrameUs = 0;
+  traceLastSequenceWriteUs = 0;
+  traceLastDecoderReadTotalUs = 0;
+  traceLastUIImageUs = 0;
+  traceFrameSamples = 0;
+  traceLastCacheHit = NO;
+  traceLastSequenceCacheHit = NO;
+  traceLastRenderedFrame = NO;
+  traceCompletedLoop = NO;
 
   [[NSNotificationCenter defaultCenter] addObserver:self
                                            selector:@selector(applicationDidBecomeActive:)
@@ -180,6 +233,11 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
     duration = 0;
   }
   self.maxFrameRate = maxFrameRate;
+  tracePlaybackStartUs = 0;
+  traceFrameTotalUs = 0;
+  traceFrameMaxUs = 0;
+  traceFrameSamples = 0;
+  traceCompletedLoop = NO;
 
   [self reset];
   [self updatePAGDecoder];
@@ -225,6 +283,7 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
 
 - (void)updatePAGDecoder {
   if (pagDecoder == nullptr) {
+    uint64_t decoderStartUs = PAGPerfNowInMicroseconds();
     float scaleFactor;
     if (self.viewSize.width >= self.viewSize.height) {
       scaleFactor = static_cast<float>(
@@ -244,6 +303,20 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
       width = pagDecoder->width();
       height = pagDecoder->height();
       numFrames = pagDecoder->numFrames();
+      if ([PAGPerfTrace Enabled]) {
+        [PAGPerfTrace LogEvent:@"decoder_ready"
+                        fields:@{
+                          @"render_target" : @"image_view",
+                          @"case" : PAGPerfCaseName(filePath),
+                          @"view_index" : @(PAGPerfViewIndex(self)),
+                          @"decoder_create_us" : @(PAGPerfNowInMicroseconds() - decoderStartUs),
+                          @"decode_width" : @(width),
+                          @"decode_height" : @(height),
+                          @"num_frames" : @(numFrames),
+                          @"max_frame_rate" : @(self.maxFrameRate),
+                          @"render_scale" : @(renderScaleFactor),
+                        }];
+      }
     }
   }
 }
@@ -274,6 +347,7 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
 - (BOOL)updateImageViewFrom:(CVPixelBufferRef)pixelBuffer atIndex:(NSInteger)frameIndex {
   [self freeCache];
   if ([[imagesMap allKeys] containsObject:@(frameIndex)]) {
+    traceLastCacheHit = YES;
     UIImage* image = imagesMap[@(frameIndex)];
     if (image) {
       self.currentFrameIndex = frameIndex;
@@ -290,7 +364,15 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
     return false;
   }
   if (pagDecoder->checkFrameChanged(static_cast<int>(frameIndex))) {
+    uint64_t readFrameStartUs = PAGPerfNowInMicroseconds();
     BOOL status = pagDecoder->readFrame(static_cast<int>(frameIndex), pixelBuffer);
+    traceLastReadFrameUs = PAGPerfNowInMicroseconds() - readFrameStartUs;
+    traceLastSequenceCacheHit = pagDecoder->lastFrameReadFromCache();
+    traceLastRenderedFrame = pagDecoder->lastFrameRendered();
+    traceLastSequenceReadUs = static_cast<uint64_t>(pagDecoder->lastSequenceReadTime());
+    traceLastRenderFrameUs = static_cast<uint64_t>(pagDecoder->lastRenderFrameTime());
+    traceLastSequenceWriteUs = static_cast<uint64_t>(pagDecoder->lastSequenceWriteTime());
+    traceLastDecoderReadTotalUs = static_cast<uint64_t>(pagDecoder->lastReadFrameTime());
     if (!status) {
       return status;
     }
@@ -326,10 +408,27 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
 }
 
 - (void)submitToImageView {
-  dispatch_main_async_safe(^{
+  uint64_t submitEnqueueUs = PAGPerfNowInMicroseconds();
+  NSInteger traceFrameIndex = self.currentFrameIndex;
+  NSInteger traceViewIndex = PAGPerfViewIndex(self);
+  NSString* traceCase = [PAGPerfCaseName(filePath) retain];
+  dispatch_main_async_safe((^{
+    uint64_t submitStartUs = PAGPerfNowInMicroseconds();
     [self setImage:self.currentUIImage];
     [self setNeedsDisplay];
-  });
+    if ([PAGPerfTrace Enabled]) {
+      [PAGPerfTrace LogEvent:@"submit"
+                      fields:@{
+                        @"render_target" : @"image_view",
+                        @"case" : traceCase != nil ? traceCase : @"",
+                        @"view_index" : @(traceViewIndex),
+                        @"frame" : @(traceFrameIndex),
+                        @"submit_queue_us" : @(submitStartUs - submitEnqueueUs),
+                        @"submit_main_us" : @(PAGPerfNowInMicroseconds() - submitStartUs),
+                      }];
+    }
+    [traceCase release];
+  }));
 }
 
 - (void)applicationDidBecomeActive:(NSNotification*)notification {
@@ -366,10 +465,12 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
   if (pixelBuffer == nil) {
     return nil;
   }
+  uint64_t startUs = PAGPerfNowInMicroseconds();
   CGImageRef imageRef = nil;
   VTCreateCGImageFromCVPixelBuffer(pixelBuffer, nil, &imageRef);
   UIImage* uiImage = [UIImage imageWithCGImage:imageRef];
   CGImageRelease(imageRef);
+  traceLastUIImageUs = PAGPerfNowInMicroseconds() - startUs;
   return uiImage;
 }
 
@@ -480,6 +581,11 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
 }
 
 - (void)play {
+  tracePlaybackStartUs = PAGPerfNowInMicroseconds();
+  traceFrameTotalUs = 0;
+  traceFrameMaxUs = 0;
+  traceFrameSamples = 0;
+  traceCompletedLoop = NO;
   [animator start];
 }
 
@@ -594,7 +700,23 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
     filePath = nil;
   }
   filePath = [path retain];
+  uint64_t loadStartUs = PAGPerfNowInMicroseconds();
   auto file = pag::PAGFile::Load([path UTF8String]);
+  uint64_t loadUs = PAGPerfNowInMicroseconds() - loadStartUs;
+  if ([PAGPerfTrace Enabled]) {
+    [PAGPerfTrace LogEvent:@"asset_load"
+                    fields:@{
+                      @"render_target" : @"image_view",
+                      @"case" : PAGPerfCaseName(path),
+                      @"view_index" : @(PAGPerfViewIndex(self)),
+                      @"path" : path != nil ? path : @"",
+                      @"load_us" : @(loadUs),
+                      @"width" : @(file ? file->width() : 0),
+                      @"height" : @(file ? file->height() : 0),
+                      @"duration_us" : @(file ? file->duration() : 0),
+                      @"frame_rate" : @(file ? file->frameRate() : 0),
+                    }];
+  }
   [self setCompositionInternal:file maxFrameRate:maxFrameRate];
   return file != nullptr;
 }
@@ -672,23 +794,92 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
   return pag::ProgressToFrame([animator progress], numFrames);
 }
 
+- (void)logTraceFrameAtIndex:(NSInteger)frameIndex
+                    progress:(double)progress
+                     changed:(BOOL)changed
+                      wallUs:(uint64_t)wallUs {
+  if (![PAGPerfTrace Enabled]) {
+    return;
+  }
+  traceFrameTotalUs += wallUs;
+  traceFrameMaxUs = std::max(traceFrameMaxUs, wallUs);
+  traceFrameSamples++;
+  [PAGPerfTrace LogEvent:@"frame"
+                  fields:@{
+                    @"render_target" : @"image_view",
+                    @"case" : PAGPerfCaseName(filePath),
+                    @"view_index" : @(PAGPerfViewIndex(self)),
+                    @"frame" : @(frameIndex),
+                    @"frame_count" : @(numFrames),
+                    @"progress" : @(progress),
+                    @"changed" : @(changed),
+                    @"wall_us" : @(wallUs),
+                    @"read_frame_us" : @(traceLastReadFrameUs),
+                    @"decoder_read_total_us" : @(traceLastDecoderReadTotalUs),
+                    @"sequence_cache_hit" : @(traceLastSequenceCacheHit),
+                    @"render_frame" : @(traceLastRenderedFrame),
+                    @"sequence_read_us" : @(traceLastSequenceReadUs),
+                    @"render_frame_us" : @(traceLastRenderFrameUs),
+                    @"sequence_write_us" : @(traceLastSequenceWriteUs),
+                    @"uiimage_us" : @(traceLastUIImageUs),
+                    @"cache_hit" : @(traceLastCacheHit),
+                    @"memory_cache_finished" : @(self.memeoryCacheFinished),
+                  }];
+  if (!traceCompletedLoop && numFrames > 0 && frameIndex >= static_cast<NSInteger>(numFrames - 1)) {
+    traceCompletedLoop = YES;
+    uint64_t totalUs = tracePlaybackStartUs > 0 ? PAGPerfNowInMicroseconds() - tracePlaybackStartUs : 0;
+    uint64_t averageUs = traceFrameSamples > 0 ? traceFrameTotalUs / traceFrameSamples : 0;
+    [PAGPerfTrace LogEvent:@"pag_complete"
+                    fields:@{
+                      @"render_target" : @"image_view",
+                      @"case" : PAGPerfCaseName(filePath),
+                      @"view_index" : @(PAGPerfViewIndex(self)),
+                      @"frames" : @(traceFrameSamples),
+                      @"frame_count" : @(numFrames),
+                      @"total_us" : @(totalUs),
+                      @"average_wall_us" : @(averageUs),
+                      @"max_wall_us" : @(traceFrameMaxUs),
+                    }];
+  }
+}
+
 - (BOOL)flush {
+  uint64_t flushStartUs = PAGPerfNowInMicroseconds();
   std::lock_guard<std::mutex> autoLock(imageViewLock);
   NSInteger frameIndex = [self currentFrameInternal];
+  double progress = [animator progress];
+  traceLastReadFrameUs = 0;
+  traceLastSequenceReadUs = 0;
+  traceLastRenderFrameUs = 0;
+  traceLastSequenceWriteUs = 0;
+  traceLastDecoderReadTotalUs = 0;
+  traceLastUIImageUs = 0;
+  traceLastCacheHit = NO;
+  traceLastSequenceCacheHit = NO;
+  traceLastRenderedFrame = NO;
   if (self.memeoryCacheFinished) {
     if ([self checkPAGCompositionChanged] == NO) {
       if (self.currentFrameIndex != frameIndex) {
         UIImage* image = imagesMap[@(frameIndex)];
         if (image) {
+          traceLastCacheHit = YES;
           self.currentFrameIndex = frameIndex;
           self.currentUIImage = image;
           [self submitToImageView];
+          [self logTraceFrameAtIndex:frameIndex
+                             progress:progress
+                              changed:YES
+                               wallUs:PAGPerfNowInMicroseconds() - flushStartUs];
           return YES;
         }
       }
     }
   }
   if (self.currentFrameIndex == frameIndex) {
+    [self logTraceFrameAtIndex:frameIndex
+                       progress:progress
+                        changed:NO
+                         wallUs:PAGPerfNowInMicroseconds() - flushStartUs];
     return NO;
   }
   [self checkPAGCompositionChanged];
@@ -697,9 +888,18 @@ static const float DEFAULT_MAX_FRAMERATE = 30.0;
   if (pixelBuffer == nil) {
     self.currentUIImage = nil;
     [self submitToImageView];
+    [self logTraceFrameAtIndex:frameIndex
+                       progress:progress
+                        changed:NO
+                         wallUs:PAGPerfNowInMicroseconds() - flushStartUs];
     return NO;
   }
-  return [self updateImageViewFrom:pixelBuffer atIndex:frameIndex];
+  BOOL changed = [self updateImageViewFrom:pixelBuffer atIndex:frameIndex];
+  [self logTraceFrameAtIndex:frameIndex
+                     progress:progress
+                      changed:changed
+                       wallUs:PAGPerfNowInMicroseconds() - flushStartUs];
+  return changed;
 }
 
 @end

@@ -26,6 +26,7 @@
 #include "rendering/layers/ContentVersion.h"
 #include "rendering/utils/BitmapBuffer.h"
 #include "rendering/utils/LockGuard.h"
+#include "tgfx/core/Clock.h"
 #include "tgfx/gpu/opengl/GLDevice.h"
 
 namespace pag {
@@ -181,24 +182,42 @@ bool PAGDecoder::readFrame(int index, HardwareBufferRef hardwareBuffer) {
 }
 
 bool PAGDecoder::readFrameInternal(int index, std::shared_ptr<BitmapBuffer> bitmap) {
+  auto totalStart = tgfx::Clock::Now();
+  _lastFrameReadFromCache = false;
+  _lastFrameRendered = false;
+  _lastSequenceReadTime = 0;
+  _lastRenderFrameTime = 0;
+  _lastSequenceWriteTime = 0;
+  _lastReadFrameTime = 0;
   if (bitmap == nullptr) {
     LOGE("PAGDecoder::readFrame() The specified bitmap buffer is invalid!");
+    _lastReadFrameTime = tgfx::Clock::Now() - totalStart;
     return false;
   }
   auto composition = getComposition();
   checkCompositionChange(composition);
   if (index < 0 || index >= _numFrames) {
     LOGE("PAGDecoder::readFrame() The index is out of range!");
+    _lastReadFrameTime = tgfx::Clock::Now() - totalStart;
     return false;
   }
   if (!checkSequenceFile(composition, bitmap->info())) {
+    _lastReadFrameTime = tgfx::Clock::Now() - totalStart;
     return false;
   }
+  auto sequenceReadStart = tgfx::Clock::Now();
   auto success = sequenceFile->readFrame(index, bitmap);
+  _lastSequenceReadTime = tgfx::Clock::Now() - sequenceReadStart;
+  _lastFrameReadFromCache = success;
   if (!success) {
+    auto renderFrameStart = tgfx::Clock::Now();
     success = renderFrame(composition, index, bitmap);
+    _lastRenderFrameTime = tgfx::Clock::Now() - renderFrameStart;
+    _lastFrameRendered = success;
     if (success) {
+      auto sequenceWriteStart = tgfx::Clock::Now();
       success = sequenceFile->writeFrame(index, bitmap);
+      _lastSequenceWriteTime = tgfx::Clock::Now() - sequenceWriteStart;
       if (!success) {
         LOGE("PAGDecoder::readFrame() Failed to write frame to SequenceFile!");
       }
@@ -217,7 +236,38 @@ bool PAGDecoder::readFrameInternal(int index, std::shared_ptr<BitmapBuffer> bitm
   if (success) {
     lastReadIndex = index;
   }
+  _lastReadFrameTime = tgfx::Clock::Now() - totalStart;
   return success;
+}
+
+bool PAGDecoder::lastFrameReadFromCache() {
+  std::lock_guard<std::mutex> autoLock(locker);
+  return _lastFrameReadFromCache;
+}
+
+bool PAGDecoder::lastFrameRendered() {
+  std::lock_guard<std::mutex> autoLock(locker);
+  return _lastFrameRendered;
+}
+
+int64_t PAGDecoder::lastSequenceReadTime() {
+  std::lock_guard<std::mutex> autoLock(locker);
+  return _lastSequenceReadTime;
+}
+
+int64_t PAGDecoder::lastRenderFrameTime() {
+  std::lock_guard<std::mutex> autoLock(locker);
+  return _lastRenderFrameTime;
+}
+
+int64_t PAGDecoder::lastSequenceWriteTime() {
+  std::lock_guard<std::mutex> autoLock(locker);
+  return _lastSequenceWriteTime;
+}
+
+int64_t PAGDecoder::lastReadFrameTime() {
+  std::lock_guard<std::mutex> autoLock(locker);
+  return _lastReadFrameTime;
 }
 
 bool PAGDecoder::renderFrame(std::shared_ptr<PAGComposition> composition, int index,

@@ -151,6 +151,22 @@
   return pagPlayer->flush();
 }
 
+- (int64_t)renderingTime {
+  return pagPlayer->renderingTime();
+}
+
+- (int64_t)presentingTime {
+  return pagPlayer->presentingTime();
+}
+
+- (int64_t)imageDecodingTime {
+  return pagPlayer->imageDecodingTime();
+}
+
+- (int64_t)graphicsMemory {
+  return pagPlayer->graphicsMemory();
+}
+
 - (CGRect)getBounds:(PAGLayer*)pagLayer {
   auto layer = [[pagLayer impl] pagLayer];
   auto bounds = pagPlayer->getBounds(layer);

@@ -1635,6 +1635,37 @@ class PAG_API PAGDecoder {
    */
   bool readFrame(int index, HardwareBufferRef hardwareBuffer);
 
+  /**
+   * Returns true if the latest successful readFrame() call was loaded from the sequence cache.
+   */
+  bool lastFrameReadFromCache();
+
+  /**
+   * Returns true if the latest readFrame() call rendered the frame because the sequence cache
+   * missed.
+   */
+  bool lastFrameRendered();
+
+  /**
+   * Returns the sequence cache read time of the latest readFrame() call in microseconds.
+   */
+  int64_t lastSequenceReadTime();
+
+  /**
+   * Returns the renderFrame() time of the latest readFrame() call in microseconds.
+   */
+  int64_t lastRenderFrameTime();
+
+  /**
+   * Returns the sequence cache write time of the latest readFrame() call in microseconds.
+   */
+  int64_t lastSequenceWriteTime();
+
+  /**
+   * Returns the total measured time of the latest readFrame() call in microseconds.
+   */
+  int64_t lastReadFrameTime();
+
  private:
   std::mutex locker = {};
   int _width = 0;
@@ -1652,6 +1683,12 @@ class PAG_API PAGDecoder {
   std::vector<TimeRange> staticTimeRanges = {};
   std::function<std::string(PAGDecoder*, std::shared_ptr<PAGComposition>)> cacheKeyGeneratorFun =
       nullptr;
+  bool _lastFrameReadFromCache = false;
+  bool _lastFrameRendered = false;
+  int64_t _lastSequenceReadTime = 0;
+  int64_t _lastRenderFrameTime = 0;
+  int64_t _lastSequenceWriteTime = 0;
+  int64_t _lastReadFrameTime = 0;
 
   static Composition* GetSingleComposition(std::shared_ptr<PAGComposition> pagComposition);
   static std::pair<int, float> GetFrameCountAndRate(std::shared_ptr<PAGComposition> pagComposition,
