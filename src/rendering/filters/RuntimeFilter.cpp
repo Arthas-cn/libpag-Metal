@@ -76,7 +76,8 @@ std::vector<tgfx::Attribute> RuntimeFilter::vertexAttributes() const {
   return {{"aPosition", tgfx::VertexFormat::Float2}, {"aTextureCoord", tgfx::VertexFormat::Float2}};
 }
 
-std::shared_ptr<tgfx::RenderPipeline> RuntimeFilter::createPipeline(tgfx::GPU* gpu) const {
+std::shared_ptr<tgfx::RenderPipeline> RuntimeFilter::createPipeline(
+    tgfx::GPU* gpu, int msaaSampleCount, tgfx::PixelFormat colorFormat) const {
   auto info = gpu->info();
   auto isDesktop = info->version.find("OpenGL ES") == std::string::npos;
   std::string versionPrefix = isDesktop ? "#version 150\n\n" : "#version 300 es\n\n";
@@ -105,6 +106,7 @@ std::shared_ptr<tgfx::RenderPipeline> RuntimeFilter::createPipeline(tgfx::GPU* g
   descriptor.vertex.module = vertexShader;
   descriptor.fragment.module = fragmentShader;
   tgfx::PipelineColorAttachment colorAttachment = {};
+  colorAttachment.format = colorFormat;
   colorAttachment.blendEnable = true;
   colorAttachment.srcColorBlendFactor = tgfx::BlendFactor::One;
   colorAttachment.dstColorBlendFactor = tgfx::BlendFactor::OneMinusSrcAlpha;
@@ -113,7 +115,7 @@ std::shared_ptr<tgfx::RenderPipeline> RuntimeFilter::createPipeline(tgfx::GPU* g
   descriptor.fragment.colorAttachments.push_back(colorAttachment);
   descriptor.layout.textureSamplers = textureSamplers();
   descriptor.layout.uniformBlocks = uniformBlocks();
-  descriptor.multisample.count = sampleCount();
+  descriptor.multisample.count = msaaSampleCount;
   onConfigurePipeline(&descriptor);
   return gpu->createRenderPipeline(descriptor);
 }
@@ -166,28 +168,43 @@ std::shared_ptr<tgfx::RenderPipeline> RuntimeFilter::getPipeline(tgfx::GPU* gpu)
   if (resources == nullptr) {
     return nullptr;
   }
-  return resources->pipeline;
+  return getPipelineForDraw(resources, gpu, sampleCount(), tgfx::PixelFormat::RGBA_8888);
+}
+
+std::shared_ptr<tgfx::RenderPipeline> RuntimeFilter::getPipelineForDraw(
+    FilterResources* resources, tgfx::GPU* gpu, int effectiveSampleCount,
+    tgfx::PixelFormat colorFormat) const {
+  if (resources == nullptr || gpu == nullptr) {
+    return nullptr;
+  }
+  if (effectiveSampleCount == sampleCount()) {
+    if (resources->pipeline == nullptr) {
+      resources->pipeline = createPipeline(gpu, effectiveSampleCount, colorFormat);
+    }
+    return resources->pipeline;
+  }
+  if (resources->nonMSAAPipeline == nullptr) {
+    resources->nonMSAAPipeline = createPipeline(gpu, 1, colorFormat);
+  }
+  return resources->nonMSAAPipeline;
 }
 
 FilterResources* RuntimeFilter::getFilterResources(tgfx::GPU* gpu) const {
   auto type = filterType();
   auto resources = cache->findFilterResources(type);
   if (resources == nullptr) {
-    auto pipeline = createPipeline(gpu);
-    if (pipeline == nullptr) {
-      return nullptr;
-    }
     tgfx::SamplerDescriptor samplerDesc(tgfx::AddressMode::ClampToEdge,
                                         tgfx::AddressMode::ClampToEdge, tgfx::FilterMode::Linear,
                                         tgfx::FilterMode::Linear, tgfx::MipmapMode::None);
     auto sampler = gpu->createSampler(samplerDesc);
+    if (sampler == nullptr) {
+      return nullptr;
+    }
     auto newResources = onCreateFilterResources();
-    newResources->pipeline = std::move(pipeline);
     newResources->sampler = std::move(sampler);
     resources = newResources.get();
     cache->addFilterResources(type, std::move(newResources));
   }
-  DEBUG_ASSERT(resources->pipeline != nullptr);
   return resources;
 }
 
@@ -207,6 +224,12 @@ bool RuntimeFilter::onDraw(tgfx::CommandEncoder* encoder,
     return false;
   }
 
+  if (inputTextures[0]->width() <= 0 || inputTextures[0]->height() <= 0 ||
+      outputTexture->width() <= 0 || outputTexture->height() <= 0) {
+    LOGE("RuntimeFilter::onDraw() invalid texture size");
+    return false;
+  }
+
   auto msaaSampleCount = sampleCount();
   std::shared_ptr<tgfx::Texture> renderTexture = nullptr;
   if (msaaSampleCount > 1) {
@@ -220,6 +243,13 @@ bool RuntimeFilter::onDraw(tgfx::CommandEncoder* encoder,
     }
   } else {
     renderTexture = outputTexture;
+  }
+
+  auto pipeline =
+      getPipelineForDraw(resources, gpu, msaaSampleCount, outputTexture->format());
+  if (pipeline == nullptr) {
+    LOGE("RuntimeFilter::onDraw() failed to get pipeline");
+    return false;
   }
 
   tgfx::RenderPassDescriptor renderPassDesc;
@@ -239,7 +269,7 @@ bool RuntimeFilter::onDraw(tgfx::CommandEncoder* encoder,
     return false;
   }
 
-  renderPass->setPipeline(resources->pipeline);
+  renderPass->setPipeline(pipeline);
 
   auto vertices = computeVertices(inputTextures[0].get(), outputTexture.get(), offset);
   auto vertexBuffer =
@@ -260,10 +290,21 @@ bool RuntimeFilter::onDraw(tgfx::CommandEncoder* encoder,
   vertexBuffer->unmap();
 
   renderPass->setVertexBuffer(0, vertexBuffer);
-  renderPass->setTexture(0, inputTextures[0], resources->sampler);
 
-  for (size_t i = 1; i < inputTextures.size(); i++) {
-    renderPass->setTexture(static_cast<unsigned>(i), inputTextures[i], resources->sampler);
+  const auto& samplerBindings = textureSamplers();
+  for (size_t i = 0; i < samplerBindings.size(); i++) {
+    const auto& entry = samplerBindings[i];
+    std::shared_ptr<tgfx::Texture> texture = nullptr;
+    if (i < inputTextures.size() && inputTextures[i] != nullptr) {
+      texture = inputTextures[i];
+    } else if (!inputTextures.empty()) {
+      // Metal requires every declared fragment sampler to be bound, even when the shader
+      // conditionally skips the lookup.
+      texture = inputTextures[0];
+    }
+    if (texture != nullptr) {
+      renderPass->setTexture(entry.binding, texture, resources->sampler);
+    }
   }
 
   onUpdateUniforms(renderPass.get(), gpu, inputTextures, offset);
